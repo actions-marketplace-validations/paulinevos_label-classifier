@@ -1,10 +1,7 @@
 name: "Label pull request"
 
-# Runs with secrets against pull requests from forks, so it must never check
-# out or execute the pull request head. This action only reads the event
-# payload and installs its own pinned code.
 on:
-  pull_request_target:
+  pull_request:
     types:
       - "opened"
   workflow_dispatch:
