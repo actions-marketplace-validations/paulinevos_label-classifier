@@ -13,16 +13,20 @@ the suggestion. Inside a GitHub Actions run, the suggestions are written to
 
 ## Using it from a GitHub workflow
 
-Define this workflow in the consuming repository — it installs the classifier
-from this repository (pinned to a version tag; upgrade deliberately), lets it
-suggest labels for a newly opened pull request, and applies the suggestion by
-adding labels, so existing labels are preserved and nothing is removed:
+Define this workflow in the consuming repository. It fires when a pull
+request opens: the action suggests labels, applies them by adding labels
+only — so existing labels are preserved and nothing is removed — and posts
+one comment saying the labels were applied automatically from AI suggestions
+and should be checked by a human:
 
 ```yaml
 name: "Label pull request"
 
+# Runs with secrets against pull requests from forks, so it must never check
+# out or execute the pull request head. This action only reads the event
+# payload and installs its own pinned code.
 on:
-  pull_request:
+  pull_request_target:
     types:
       - "opened"
   workflow_dispatch:
@@ -37,68 +41,28 @@ permissions:
   issues: "write"
   pull-requests: "read"
 
-concurrency:
-  group: "label-pull-request-${{ github.event.pull_request.number || inputs.number }}"
-  cancel-in-progress: true
-
 jobs:
   label:
     name: "Label pull request"
     runs-on: "ubuntu-latest"
 
-    outputs:
-      labels: "${{ steps.suggest.outputs.labels }}"
-      advisory: "${{ steps.suggest.outputs.advisory }}"
-
     steps:
-      - name: "Install the label classifier"
-        run: |
-          mkdir -p "${RUNNER_TEMP}/labeler"
-          cd "${RUNNER_TEMP}/labeler"
-          printf '{"repositories":[{"type":"vcs","url":"https://github.com/paulinevos/label-classifier"}],"require":{"vos/label-classifier":"^1.0.0"}}\n' > composer.json
-          composer install --no-interaction --no-progress
-
-      # The command only suggests labels; this workflow decides what happens
-      # with the suggestion.
-      - id: "suggest"
-        name: "Suggest labels"
+      - name: "Suggest and apply labels"
+        uses: "paulinevos/label-classifier@v1"
+        with:
+          number: "${{ inputs.number }}"
         env:
-          PR_OPTION: "${{ inputs.number && format('--pr={0}', inputs.number) || '' }}"
-          JEV_API_KEY: ${{ secrets.JEV_API_KEY }}
-        run: php "${RUNNER_TEMP}/labeler/vendor/bin/label-pull-request" "$PR_OPTION"
-
-      # Adding labels only: labels already on the pull request are preserved,
-      # and nothing is removed.
-      - name: "Apply suggested labels"
-        if: "steps.suggest.outputs.labels != ''"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.pull_request.number || inputs.number }}
-          LABELS: ${{ steps.suggest.outputs.labels }}
-        run: |
-          echo "$LABELS" | tr ',' '\n' | while read -r label; do
-            [ -n "$label" ] && gh pr edit "$NUMBER" --repo "${{ github.repository }}" --add-label "$label"
-          done
-
-      # Tell people what happened to their pull request, once.
-      - name: "Comment about the automatic labels"
-        if: "steps.suggest.outputs.labels != ''"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.pull_request.number || inputs.number }}
-          LABELS: ${{ steps.suggest.outputs.labels }}
-        run: |
-          if gh pr view "$NUMBER" --repo "${{ github.repository }}" --json comments --jq '.comments[].body' | grep -q 'label-classifier'; then
-            exit 0
-          fi
-          gh pr comment "$NUMBER" --repo "${{ github.repository }}" --body "<!-- label-classifier -->Applied the labels \`${LABELS}\` automatically. They were suggested by an AI classifier from the pull request content and have not been reviewed by a human — please check that they are correct and remove any that do not fit."
+          JEV_API_KEY: "${{ secrets.JEV_API_KEY }}"
 ```
 
-The manual `workflow_dispatch` trigger exists because `pull_request: opened`
-runs the workflow from the base branch: the automatic trigger only goes live
-once the workflow is merged, while a manual run with a pull request number
-works immediately. The same workflow ships as a workflow template in this
-repository's `.github/workflow-templates/`.
+Set `apply: false` to only suggest — the labels are then available as step
+outputs `labels` and `advisory`. Pass `model` or `endpoint` to override the
+defaults (`jev-1.13`, the Typesafe endpoint). The manual `workflow_dispatch`
+trigger exists because `pull_request: opened` runs the workflow from the base
+branch: the automatic trigger only goes live once the workflow is merged,
+while a manual run with a pull request number works immediately. The same
+workflow ships as a workflow template in this repository's
+`.github/workflow-templates/`.
 
 What the consuming repository needs:
 
@@ -106,8 +70,6 @@ What the consuming repository needs:
 | --- | --- |
 | `JEV_API_KEY` secret | authenticates against the evaluation API |
 | `issues: write` permission | applying labels |
-| `JEV_MODEL` variable, optional | the model; defaults to `jev-1.13` |
-| `JEV_ENDPOINT` variable, optional | the API endpoint; defaults to `https://api.typesafe.ai/v1/systemone`, set it for a gateway such as OpenCode's |
 
 ## Configuration
 
