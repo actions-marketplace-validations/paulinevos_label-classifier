@@ -1,0 +1,70 @@
+name: "Label pull request"
+
+on:
+  pull_request:
+    types:
+      - "opened"
+  workflow_call:
+    inputs:
+      model:
+        description: "Jev model used for the label policy questions"
+        required: false
+        type: "string"
+        default: ""
+      dry-run:
+        description: "Evaluate and report without applying labels"
+        required: false
+        type: "boolean"
+        default: false
+
+permissions:
+  contents: "read"
+  issues: "write"
+  pull-requests: "read"
+
+concurrency:
+  group: "label-pull-request-${{ github.event.pull_request.number }}"
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: "Label pull request"
+    runs-on: "ubuntu-latest"
+
+    outputs:
+      labels: "${{ steps.suggest.outputs.labels }}"
+      advisory: "${{ steps.suggest.outputs.advisory }}"
+
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v7"
+
+      - name: "Install dependencies"
+        run: composer install --no-interaction --no-progress --prefer-dist --no-dev
+
+      # The command only suggests labels; this workflow decides what happens
+      # with the suggestion.
+      - id: "suggest"
+        name: "Suggest labels"
+        run: php bin/label-pull-request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          JEV_API_KEY: ${{ secrets.JEV_API_KEY }}
+          JEV_MODEL: ${{ inputs.model || vars.JEV_MODEL || 'jev-1.13' }}
+          JEV_ENDPOINT: ${{ vars.JEV_ENDPOINT }}
+
+      # Adding labels only: labels already on the pull request are preserved,
+      # and nothing is removed.
+      - name: "Apply suggested labels"
+        if: "inputs.dry-run != true && steps.suggest.outputs.labels != ''"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          LABELS: ${{ steps.suggest.outputs.labels }}
+        run: |
+          echo "$LABELS" | tr ',' '\n' | while read -r label; do
+            [ -n "$label" ] && gh pr edit "$NUMBER" --repo "${{ github.repository }}" --add-label "$label"
+          done

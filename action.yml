@@ -1,0 +1,90 @@
+name: "Label Classifier"
+description: >-
+  Suggests labels for pull requests from label policies, applies them, and
+  notes that they need human review.
+
+inputs:
+  number:
+    description: "Pull request number, for manual workflow_dispatch runs"
+    required: false
+  apply:
+    description: "Whether to apply the suggested labels and comment"
+    required: false
+    default: "true"
+  model:
+    description: "Jev model; defaults to jev-1.13"
+    required: false
+  endpoint:
+    description: "Jev API endpoint; defaults to the Typesafe endpoint"
+    required: false
+
+outputs:
+  labels:
+    description: "Comma-separated suggested labels"
+    value: "${{ steps.suggest.outputs.labels }}"
+  advisory:
+    description: "Comma-separated labels that cleared their threshold but are advisory"
+    value: "${{ steps.suggest.outputs.advisory }}"
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Set up PHP"
+      uses: "shivammathur/setup-php@v2"
+      with:
+        php-version: "8.3"
+        coverage: "none"
+
+    - name: "Install dependencies"
+      run: composer install --no-interaction --no-progress --working-dir "$GITHUB_ACTION_PATH"
+      shell: bash
+
+    # The command only suggests labels; the steps below decide what happens
+    # with the suggestion.
+    - id: "suggest"
+      name: "Suggest labels"
+      run: |
+        ARGS=()
+        [ -n "$PR_NUMBER" ] && ARGS=(--pr="$PR_NUMBER")
+        php "$GITHUB_ACTION_PATH/bin/label-pull-request" "${ARGS[@]}"
+      shell: bash
+      env:
+        PR_NUMBER: "${{ inputs.number }}"
+        JEV_API_KEY: "${{ env.JEV_API_KEY }}"
+        JEV_MODEL: "${{ inputs.model }}"
+        JEV_ENDPOINT: "${{ inputs.endpoint }}"
+
+    # Adding labels only: labels already on the pull request are preserved,
+    # and nothing is removed.
+    - name: "Apply suggested labels"
+      if: "inputs.apply == 'true' && steps.suggest.outputs.labels != ''"
+      run: |
+        ARGS=()
+        while IFS= read -r label; do
+          label="$(echo "$label" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          [ -n "$label" ] && ARGS+=(--add-label "$label")
+        done < <(echo "$LABELS" | tr ',' '\n')
+        [ ${#ARGS[@]} -gt 0 ] && gh pr edit "$NUMBER" --repo "$GITHUB_REPOSITORY" "${ARGS[@]}"
+      shell: bash
+      env:
+        GH_TOKEN: "${{ github.token }}"
+        NUMBER: "${{ github.event.pull_request.number || inputs.number }}"
+        LABELS: "${{ steps.suggest.outputs.labels }}"
+
+    # Tell people what happened to their pull request, once.
+    - name: "Comment about the automatic labels"
+      if: "inputs.apply == 'true' && steps.suggest.outputs.labels != ''"
+      run: |
+        if gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" --json comments --jq '.comments[].body' | grep -q 'label-classifier'; then
+          exit 0
+        fi
+        gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "<!-- label-classifier -->Applied the labels \`${LABELS}\` automatically. They were suggested by an AI classifier from the pull request content and have not been reviewed by a human — please check that they are correct and remove any that do not fit."
+      shell: bash
+      env:
+        GH_TOKEN: "${{ github.token }}"
+        NUMBER: "${{ github.event.pull_request.number || inputs.number }}"
+        LABELS: "${{ steps.suggest.outputs.labels }}"
+
+branding:
+  icon: "tag"
+  color: "blue"

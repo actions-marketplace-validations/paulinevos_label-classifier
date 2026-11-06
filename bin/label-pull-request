@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Vos\LabelClassifier\Command\LabelPullRequestCommand;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Dotenv\Dotenv;
+
+// Runs from a repository checkout (its own vendor) and as a Composer
+// dependency (the consumer's vendor).
+$autoloaders = [
+    dirname(__DIR__) . '/vendor/autoload.php',
+    dirname(__DIR__, 3) . '/autoload.php',
+];
+
+foreach ($autoloaders as $autoloader) {
+    if (is_file($autoloader)) {
+        require $autoloader;
+
+        break;
+    }
+}
+
+// getenv() is used throughout, so the loader must write to the process
+// environment, not only to $_ENV and $_SERVER.
+if (is_file($envFile = dirname(__DIR__) . '/.env')) {
+    (new Dotenv())->usePutenv(true)->load($envFile);
+}
+
+$application = new Application('label-classifier');
+$application->add(new LabelPullRequestCommand());
+$application->setDefaultCommand('label-pull-request', true);
+
+exit($application->run());

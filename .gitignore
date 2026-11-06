@@ -1,0 +1,11 @@
+/vendor/
+/.idea/
+composer.phar
+.phpunit.result.cache
+.phpunit.cache/
+.env
+# Local annotation and benchmarking tools and artifacts
+/tools/
+/benchmarks/
+# Local benchmarking tooling and artifacts
+/benchmarks/

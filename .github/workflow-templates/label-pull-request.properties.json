@@ -1,0 +1,4 @@
+{
+    "name": "Label pull request",
+    "description": "Suggests labels for a pull request by answering label policies against its context, then applies them by adding labels only"
+}

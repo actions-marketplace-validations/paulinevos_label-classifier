@@ -1,0 +1,54 @@
+{
+    "labels": {
+        "BC Break": {
+            "question": "Does this pull request make supported usage incompatible, for example by changing the public API or increasing platform requirements? Deprecation alone is not a breaking change.",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "Bug": {
+            "question": "Does this pull request primarily fix broken behavior, or behavior that is inconsistent with the documentation? A regression test added alongside a change does not by itself make the change a new feature.",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "CI": {
+            "question": "Does this pull request change the automated build, test, or delivery infrastructure? Adding tests alone is not sufficient.",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "Documentation": {
+            "question": "Does this pull request stand on its own as a documentation change: either a significant documentation update, or a pull request that only changes documentation, code comments, or doc blocks? A small documentation tweak that merely accompanies a behavioral change does not count. Changes that only improve static-analysis PHPDoc types belong under Typing instead.",
+            "threshold": 0.9,
+            "application": "auto"
+        },
+        "Feature": {
+            "question": "Does this pull request introduce a user-facing capability that was previously unavailable?",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "Needs Test": {
+            "question": "Does this pull request change behavior while the test coverage for that behavior is demonstrably missing or inadequate?",
+            "threshold": 0.8,
+            "application": "advisory"
+        },
+        "Release Blocker": {
+            "question": "Has release management explicitly decided that this pull request blocks the next release? Severity alone is not sufficient.",
+            "threshold": 0.8,
+            "application": "manual"
+        },
+        "Task": {
+            "question": "Is this pull request maintenance, refactoring, or cleanup without a user-facing fix and without a new capability?",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "Typing": {
+            "question": "Does this pull request primarily improve type declarations, PHPDoc types, generics, or static analysis?",
+            "threshold": 0.8,
+            "application": "auto"
+        },
+        "dependencies": {
+            "question": "Does this pull request intentionally change dependency versions or constraints? Incidental lockfile churn is not sufficient.",
+            "threshold": 0.8,
+            "application": "auto"
+        }
+    }
+}
